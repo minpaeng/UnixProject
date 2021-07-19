@@ -1,0 +1,178 @@
+  1 #include <stdio.h>
+  2 #include <stdlib.h>
+  3 #include <unistd.h>
+  4 #include <string.h>
+  5 #include <sys/socket.h>
+  6 #include <signal.h>
+  7 #include <pthread.h>
+  8
+  9 #define LEN 256
+ 10 #define PORTNUM 10223
+ 11 #define oops(x) {fprintf(stderr, "Failed connect to server\n"); exit(x);};
+ 12
+ 13 extern int connect_to_server(char *host, int portnum);
+ 14 void enter_name(int fd);
+ 15 void receive_countDown(int fd);
+ 16 void quiz_ing(int fd);
+ 17 void *enter_answer(void *);
+ 18 void result(int fd);
+ 19
+ 20 int flag;
+ 21
+ 22 struct client{
+ 23      char Name[11];
+ 24      //int score;
+ 25      //int successRate;
+ 26 };
+ 27
+ 28 struct client Client;
+ 29
+ 30 int main(int argc, char *argv[]) {
+ 31     int fd;
+ 32
+ 33     fd = connect_to_server(argv[1], PORTNUM);
+ 34     if(fd == -1)
+ 35     {
+ 36         fprintf(stderr, "failed to connect\n");
+ 37         exit(1);
+ 38     }
+ 39
+ 40     //사용자 이름 입력
+ 41     enter_name(fd);
+ 42
+ 43      //countdown
+ 44      receive_countDown(fd);
+ 45
+ 46      //퀴즈구현
+ 47       quiz_ing(fd);
+ 48
+ 49       sleep(2);
+ 50
+ 51       //퀴즈 종료 후 참가자들의 결과
+ 52       result(fd);
+ 53
+ 54       close(fd);
+ 55
+ 56       return 0;
+ 57   }
+ 58
+ 59   void enter_name(int fd){
+ 60       char buf[LEN], name[10];
+ 61       int n;
+ 62
+ 63       //get name_enter msg
+ 64       if((n = read(fd, buf, LEN)) == 0) oops(1);
+ 65       write(1, buf, n);
+ 66
+ 67       //send user_name
+ 68       scanf("%s", name);
+ 69       strncpy(Client.Name, name, strlen(name));
+ 70       write(fd, Client.Name, 10);
+ 71
+ 72       // printf("user %s ok\n", Client.Name);
+ 73
+ 74       printf("\n");
+ 75   }
+ 76
+ 77   void receive_countDown(int fd){
+ 78      char buf[LEN];
+ 79      int n;
+ 80      //printf("succes\n\n");
+ 81
+ 82      //get count msg
+ 83      if((n = read(fd, buf, LEN)) == 0) oops(2);
+ 84      write(1, buf, n);
+ 85
+ 86      //read count
+ 87      while(read(fd, buf, 5)){
+ 88          if(n == 0) oops(8);
+ 89          write(1, buf, 4);
+ 90          if(!strncmp(buf, "0", 1)) break;
+ 91      }
+ 92      printf("\n\n");
+ 93
+ 94      //get start msg
+ 95      if((n = read(fd, buf, LEN)) == 0) oops(3);
+ 96      write(1, buf, n);
+ 97      system("clear");
+ 98   }
+ 99
+100  void quiz_ing(int fd) {
+101      char buf[LEN], buf1[LEN], answer[LEN];
+102      int n, n1;
+103      pthread_t t1;
+104
+105      printf("문제가 제시된 후 10초내에 답을 입력해주시요. \n");
+106
+107      while(1){
+108          //read question
+109          while((n = read(fd, buf, 48)) != 0) break;
+110          if(strncmp(buf, "end", 3) == 0) {
+111              break;
+112          }
+113
+114          printf("\n");
+115          write(1, buf, n);
+116          printf("\n");
+117          flag = 0;
+118
+119          pthread_create(&t1, NULL, enter_answer, &fd);
+120
+121          //scanf("%s", answer);
+122          while(n1 = read(fd, buf1, 3)){
+123              //write(1, buf1, n1);
+124
+125              //10seconds count_down
+126              if(!strncmp(buf1, "0..", 3)){
+127                  printf("Time out!\n");
+128                  if(flag == 0) write(fd, buf1, n1);
+129                  pthread_cancel(t1);
+130                  break;
+131              }
+132          }
+133
+134          printf("\n");
+135          if((n1 = read(fd, answer, 7)) == 0) oops(4); //size = 8
+136          //printf("next1\n");
+137          write(1, answer, n1);
+138          if(!strncmp(answer, "A", 1)){
+139              if((read(fd, answer, 1)) == 0) oops(5);
+140              printf("\n");
+141          }
+142
+143          printf("\n");
+144          n = read(fd, buf, 26);
+145          printf("**Current State**\n");
+146          write(1, buf, n);
+147          sleep(2);
+148          system("clear");
+149      }
+150  }
+151
+152  void *enter_answer(void *Fd){
+153      char buf[LEN];
+154      int n;
+155      int *fd = (int *)Fd;
+156
+157      scanf("%s", buf);
+158      write(*fd, buf, strlen(buf));
+159      flag = 1;
+160  }
+161
+162  void result(int fd){
+163      int n;
+164      char buf[LEN];
+165
+166      printf("-------Result-------\n");
+167      fflush(stdout);
+168     /* while(1){
+169 175         if(( n = read(fd, buf, LEN)) > 0) break;
+170 176     }*/
+171
+172      while((n = read(fd, buf, LEN)) != 0){
+173          write(1, buf, n);
+174      }
+175      if(n == 0) exit(10);
+176      //write(1, buf, n);
+177 }
+
